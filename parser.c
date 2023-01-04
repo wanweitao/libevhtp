@@ -11,6 +11,7 @@
 #include "internal.h"
 #include "evhtp/parser.h"
 #include "evhtp/config.h"
+#include "evhtp/evhtp.h"
 
 #if '\n' != '\x0a' || 'A' != 65
 #error "You have somehow found a non-ASCII host. We can't build here."
@@ -732,6 +733,9 @@ htparser_run(htparser * p, htparse_hooks * hooks, const char * data, size_t len)
 
     p->error      = htparse_error_none;
     p->bytes_read = 0;
+
+    struct evhtp_connection * conn = p->userdata;
+    int req_method = (conn && conn->request) ? conn->request->method : htp_method_UNKNOWN;
 
     for (i = 0; i < len; i++)
     {
@@ -2023,6 +2027,11 @@ hdrline_start:
                         } else if (p->flags & parser_flag_chunked)
                         {
                             p->state = s_chunk_size_start;
+                        } else if (req_method == htp_method_HEAD)
+                        {
+                            // printf("Trying to complete...\n");
+                            res      = hook_on_msg_complete_run(p, hooks);
+                            p->state = s_start;
                         } else if (p->content_len > 0)
                         {
                             p->state = s_body_read;
